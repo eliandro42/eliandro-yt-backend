@@ -2,7 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const { exec } = require('child_process');
 const app = express();
-const PORT = process.env.PORT || 9000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
@@ -15,16 +15,21 @@ app.post('/download', async (req, res) => {
     }
 
     try {
-        // Faz uma requisição para o ssyoutube para obter o link de download do vídeo em 720p
-        const response = await axios.get(`https://ssyoutube.com/download/${youtubeUrl}`);
+        // Faz uma requisição POST para o yt5s para obter o link de download
+        const response = await axios.post('https://yt5s.com/api/ajax', {
+            url: youtubeUrl,
+            format: 'mp4'
+        });
 
         // Verifica se foi possível obter o link de download
         if (!response.data) {
             return res.status(500).json({ error: 'Não foi possível obter o link de download do vídeo.' });
         }
 
-        // Executa o comando para baixar o vídeo utilizando o ssyoutube
-        const downloadLink = response.data;
+        // Obtém o link de download do vídeo em 720p (ou outro formato desejado)
+        const downloadLink = response.data.dl_link;
+
+        // Executa o comando para baixar o vídeo utilizando o wget
         const downloadCommand = `wget -O video.mp4 ${downloadLink}`;
 
         exec(downloadCommand, (error, stdout, stderr) => {
@@ -33,13 +38,25 @@ app.post('/download', async (req, res) => {
                 return res.status(500).json({ error: 'Erro ao baixar o vídeo.' });
             }
             console.log(`Vídeo baixado com sucesso: ${stdout}`);
-            res.json({ message: 'Vídeo baixado com sucesso.' });
+
+            // Envie o arquivo de vídeo baixado como resposta
+            const videoPath = `${__dirname}/video.mp4`;
+            res.download(videoPath, 'video.mp4', (err) => {
+                if (err) {
+                    console.error('Erro ao enviar o arquivo de vídeo:', err);
+                    return res.status(500).json({ error: 'Erro ao enviar o arquivo de vídeo.' });
+                }
+                console.log('Arquivo de vídeo enviado com sucesso.');
+                // Limpa o arquivo de vídeo após o envio
+                exec(`rm -rf ${videoPath}`);
+            });
         });
     } catch (error) {
-        console.error(`Erro ao buscar o vídeo: ${error.message}`);
-        res.status(500).json({ error: 'Erro ao buscar o vídeo.' });
+        console.error('Erro ao buscar vídeo:', error);
+        res.status(500).json({ error: 'Erro ao buscar vídeo.' });
     }
 });
 
-// Netlify Lambda handler
-module.exports = app;
+app.listen(PORT, () => {
+    console.log(`Servidor rodando na porta ${PORT}`);
+});
