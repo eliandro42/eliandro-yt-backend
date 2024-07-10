@@ -1,3 +1,14 @@
-[build]
-  functions = "netlify/functions"
-  node_version = "14"
+[[redirects]]
+  from = "/.netlify/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+[[headers]]
+  # Define as configurações de cabeçalho para permitir requisições CORS
+  for = "/.netlify/functions/*"
+    [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept"
+    Access-Control-Max-Age = "300"
