@@ -2,6 +2,7 @@ const axios = require('axios');
 const { exec } = require('child_process');
 const fs = require('fs');
 const sanitize = require('sanitize-filename');
+const path = require('path');
 
 exports.handler = async function(event, context) {
     // Adiciona headers CORS
@@ -40,8 +41,11 @@ exports.handler = async function(event, context) {
     }
 
     try {
-        // Executa o youtube-dl para obter informações do vídeo
-        const getInfoCommand = `youtube-dl -e --get-id ${youtubeUrl}`;
+        // Caminho absoluto para youtube-dl
+        const youtubeDLPath = path.join(__dirname, 'node_modules', '.bin', 'youtube-dl');
+
+        // Comando para buscar o título e ID do vídeo
+        const getInfoCommand = `${youtubeDLPath} -e --get-id ${youtubeUrl}`;
         const { stdout: videoTitle, stderr } = await execPromise(getInfoCommand);
 
         if (stderr) {
@@ -56,8 +60,8 @@ exports.handler = async function(event, context) {
         // Sanitiza o título do vídeo para garantir que seja um nome de arquivo válido
         const sanitizedTitle = sanitize(videoTitle.trim());
 
-        // Executa o youtube-dl para baixar o vídeo
-        const downloadCommand = `youtube-dl -o video.mp4 ${youtubeUrl}`;
+        // Comando para baixar o vídeo
+        const downloadCommand = `${youtubeDLPath} -o video.mp4 ${youtubeUrl}`;
         const downloadResult = await execPromise(downloadCommand);
 
         if (downloadResult.stderr) {
@@ -70,7 +74,7 @@ exports.handler = async function(event, context) {
         }
 
         // Verifica se o arquivo de vídeo foi baixado com sucesso
-        const videoPath = `${__dirname}/video.mp4`;
+        const videoPath = path.join(__dirname, 'video.mp4');
         if (!fs.existsSync(videoPath)) {
             console.error('Arquivo de vídeo não encontrado após o download');
             return {
@@ -81,7 +85,7 @@ exports.handler = async function(event, context) {
         }
 
         // Renomeia o arquivo de vídeo com o título sanitizado
-        const renamedVideoPath = `${__dirname}/${sanitizedTitle}.mp4`;
+        const renamedVideoPath = path.join(__dirname, `${sanitizedTitle}.mp4`);
         fs.renameSync(videoPath, renamedVideoPath);
 
         // Retorna o arquivo de vídeo renomeado como resposta
