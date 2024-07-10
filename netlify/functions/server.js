@@ -1,6 +1,7 @@
 const axios = require('axios');
 const { exec } = require('child_process');
 const fs = require('fs');
+const sanitize = require('sanitize-filename');
 
 exports.handler = async function(event, context) {
     // Adiciona headers CORS
@@ -39,74 +40,77 @@ exports.handler = async function(event, context) {
     }
 
     try {
-        // Faz uma requisição GET para o SaveFrom para obter o link de download
-        const response = await axios.get(`https://sfrom.net/${youtubeUrl}`);
+        // Executa o youtube-dl para obter informações do vídeo
+        const getInfoCommand = `youtube-dl -e --get-id ${youtubeUrl}`;
+        const { stdout: videoTitle, stderr } = await execPromise(getInfoCommand);
 
-        // Verifica se foi possível obter o link de download
-        if (!response.data || !response.data.result) {
+        if (stderr) {
+            console.error(`Erro ao obter informações do vídeo: ${stderr}`);
             return {
                 statusCode: 500,
                 headers,
-                body: JSON.stringify({ error: 'Não foi possível obter o link de download do vídeo' })
+                body: JSON.stringify({ error: 'Erro ao obter informações do vídeo' })
             };
         }
 
-        // Obtém o link de download do vídeo
-        const downloadLink = response.data.result.split('"')[1];
+        // Sanitiza o título do vídeo para garantir que seja um nome de arquivo válido
+        const sanitizedTitle = sanitize(videoTitle.trim());
 
-        // Executa o comando para baixar o vídeo utilizando o wget
-        const downloadCommand = `wget -O video.mp4 ${downloadLink}`;
+        // Executa o youtube-dl para baixar o vídeo
+        const downloadCommand = `youtube-dl -o video.mp4 ${youtubeUrl}`;
+        const downloadResult = await execPromise(downloadCommand);
 
-        // Retorna uma promessa para lidar com a execução do comando
-        return new Promise((resolve, reject) => {
-            exec(downloadCommand, async (error, stdout, stderr) => {
-                if (error) {
-                    console.error(`Erro ao baixar o vídeo: ${error.message}`);
-                    resolve({
-                        statusCode: 500,
-                        headers,
-                        body: JSON.stringify({ error: 'Erro ao baixar o vídeo' })
-                    });
-                } else {
-                    console.log(`Vídeo baixado com sucesso: ${stdout}`);
+        if (downloadResult.stderr) {
+            console.error(`Erro ao baixar o vídeo: ${downloadResult.stderr}`);
+            return {
+                statusCode: 500,
+                headers,
+                body: JSON.stringify({ error: 'Erro ao baixar o vídeo' })
+            };
+        }
 
-                    // Lê o arquivo de vídeo baixado
-                    const videoPath = `${__dirname}/video.mp4`;
-                    const videoData = fs.readFileSync(videoPath);
+        // Verifica se o arquivo de vídeo foi baixado com sucesso
+        const videoPath = `${__dirname}/video.mp4`;
+        if (!fs.existsSync(videoPath)) {
+            console.error('Arquivo de vídeo não encontrado após o download');
+            return {
+                statusCode: 500,
+                headers,
+                body: JSON.stringify({ error: 'Arquivo de vídeo não encontrado após o download' })
+            };
+        }
 
-                    // Exclui o arquivo de vídeo após enviar
-                    fs.unlinkSync(videoPath);
+        // Renomeia o arquivo de vídeo com o título sanitizado
+        const renamedVideoPath = `${__dirname}/${sanitizedTitle}.mp4`;
+        fs.renameSync(videoPath, renamedVideoPath);
 
-                    // Envie o arquivo de vídeo baixado como resposta
-                    const videoName = await getYouTubeVideoTitle(youtubeUrl);
-                    resolve({
-                        statusCode: 200,
-                        headers: {
-                            'Content-Type': 'video/mp4',
-                            'Content-Disposition': `attachment; filename="${videoName}.mp4"`
-                        },
-                        body: videoData.toString('base64'),
-                        isBase64Encoded: true
-                    });
-                }
-            });
-        });
+        // Retorna o arquivo de vídeo renomeado como resposta
+        return {
+            statusCode: 200,
+            headers: {
+                'Content-Type': 'video/mp4',
+                'Content-Disposition': `attachment; filename="${sanitizedTitle}.mp4"`
+            },
+            body: fs.createReadStream(renamedVideoPath)
+        };
     } catch (error) {
-        console.error('Erro ao buscar vídeo:', error);
+        console.error('Erro ao buscar ou baixar vídeo:', error);
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({ error: 'Erro ao buscar vídeo' })
+            body: JSON.stringify({ error: 'Erro ao buscar ou baixar vídeo' })
         };
     }
 };
 
-async function getYouTubeVideoTitle(url) {
-    try {
-        const response = await axios.get(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
-        return response.data.title;
-    } catch (error) {
-        console.error('Erro ao obter título do vídeo:', error);
-        return 'video';
-    }
+function execPromise(command) {
+    return new Promise((resolve, reject) => {
+        exec(command, (error, stdout, stderr) => {
+            if (error) {
+                reject(error);
+            } else {
+                resolve({ stdout, stderr });
+            }
+        });
+    });
 }
