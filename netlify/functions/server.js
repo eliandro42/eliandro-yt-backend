@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { exec } = require('child_process');
+const fs = require('fs');
 
 exports.handler = async function(event, context) {
     // Adiciona headers CORS
@@ -58,7 +59,7 @@ exports.handler = async function(event, context) {
 
         // Retorna uma promessa para lidar com a execução do comando
         return new Promise((resolve, reject) => {
-            exec(downloadCommand, (error, stdout, stderr) => {
+            exec(downloadCommand, async (error, stdout, stderr) => {
                 if (error) {
                     console.error(`Erro ao baixar o vídeo: ${error.message}`);
                     resolve({
@@ -69,15 +70,23 @@ exports.handler = async function(event, context) {
                 } else {
                     console.log(`Vídeo baixado com sucesso: ${stdout}`);
 
-                    // Envie o arquivo de vídeo baixado como resposta
+                    // Lê o arquivo de vídeo baixado
                     const videoPath = `${__dirname}/video.mp4`;
+                    const videoData = fs.readFileSync(videoPath);
+
+                    // Exclui o arquivo de vídeo após enviar
+                    fs.unlinkSync(videoPath);
+
+                    // Envie o arquivo de vídeo baixado como resposta
+                    const videoName = await getYouTubeVideoTitle(youtubeUrl);
                     resolve({
                         statusCode: 200,
                         headers: {
                             'Content-Type': 'video/mp4',
-                            'Content-Disposition': 'attachment; filename="video.mp4"'
+                            'Content-Disposition': `attachment; filename="${videoName}.mp4"`
                         },
-                        body: videoPath
+                        body: videoData.toString('base64'),
+                        isBase64Encoded: true
                     });
                 }
             });
@@ -91,3 +100,13 @@ exports.handler = async function(event, context) {
         };
     }
 };
+
+async function getYouTubeVideoTitle(url) {
+    try {
+        const response = await axios.get(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+        return response.data.title;
+    } catch (error) {
+        console.error('Erro ao obter título do vídeo:', error);
+        return 'video';
+    }
+}
