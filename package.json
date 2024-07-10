@@ -14,6 +14,7 @@
     "express": "^4.19.2",
     "fs": "^0.0.1-security",
     "sanitize-filename": "^1.6.3",
-    "netlify-lambda": "^2.0.16"
+    "netlify-lambda": "^2.0.16",
+    "youtube-dl": "^3.5.0"
   }
 }
