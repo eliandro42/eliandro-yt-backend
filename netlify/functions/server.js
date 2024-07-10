@@ -4,9 +4,26 @@ const axios = require('axios');
 const { exec } = require('child_process');
 
 exports.handler = async function(event, context) {
+    // Adiciona headers CORS
+    const headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept'
+    };
+
+    if (event.httpMethod === 'OPTIONS') {
+        // Retorna resposta para requisições OPTIONS
+        return {
+            statusCode: 200,
+            headers,
+            body: ''
+        };
+    }
+
     if (event.httpMethod !== 'POST') {
+        // Retorna erro para métodos não permitidos
         return {
             statusCode: 405,
+            headers,
             body: JSON.stringify({ error: 'Método não permitido' })
         };
     }
@@ -14,8 +31,10 @@ exports.handler = async function(event, context) {
     const { youtubeUrl } = JSON.parse(event.body);
 
     if (!youtubeUrl) {
+        // Retorna erro se a URL do YouTube não foi fornecida
         return {
             statusCode: 400,
+            headers,
             body: JSON.stringify({ error: 'URL do YouTube não fornecida' })
         };
     }
@@ -31,6 +50,7 @@ exports.handler = async function(event, context) {
         if (!response.data || !response.data.dl_link) {
             return {
                 statusCode: 500,
+                headers,
                 body: JSON.stringify({ error: 'Não foi possível obter o link de download do vídeo' })
             };
         }
@@ -46,6 +66,7 @@ exports.handler = async function(event, context) {
                 console.error(`Erro ao baixar o vídeo: ${error.message}`);
                 return {
                     statusCode: 500,
+                    headers,
                     body: JSON.stringify({ error: 'Erro ao baixar o vídeo' })
                 };
             }
@@ -66,6 +87,7 @@ exports.handler = async function(event, context) {
         console.error('Erro ao buscar vídeo:', error);
         return {
             statusCode: 500,
+            headers,
             body: JSON.stringify({ error: 'Erro ao buscar vídeo' })
         };
     }
