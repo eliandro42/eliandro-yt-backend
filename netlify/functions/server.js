@@ -1,5 +1,3 @@
-// functions/server.js
-
 const axios = require('axios');
 const { exec } = require('child_process');
 
@@ -40,12 +38,8 @@ exports.handler = async function(event, context) {
     }
 
     try {
-        // Faz uma requisição POST para o y2mate para obter o link de download
-        const response = await axios.post('https://www.y2mate.com/mates/convert', {
-            url: youtubeUrl,
-            ajax: '1',
-            quality: '999'
-        });
+        // Faz uma requisição GET para o SaveFrom para obter o link de download
+        const response = await axios.get(`https://sfrom.net/${youtubeUrl}`);
 
         // Verifica se foi possível obter o link de download
         if (!response.data || !response.data.result) {
@@ -62,27 +56,31 @@ exports.handler = async function(event, context) {
         // Executa o comando para baixar o vídeo utilizando o wget
         const downloadCommand = `wget -O video.mp4 ${downloadLink}`;
 
-        exec(downloadCommand, (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Erro ao baixar o vídeo: ${error.message}`);
-                return {
-                    statusCode: 500,
-                    headers,
-                    body: JSON.stringify({ error: 'Erro ao baixar o vídeo' })
-                };
-            }
-            console.log(`Vídeo baixado com sucesso: ${stdout}`);
+        // Retorna uma promessa para lidar com a execução do comando
+        return new Promise((resolve, reject) => {
+            exec(downloadCommand, (error, stdout, stderr) => {
+                if (error) {
+                    console.error(`Erro ao baixar o vídeo: ${error.message}`);
+                    resolve({
+                        statusCode: 500,
+                        headers,
+                        body: JSON.stringify({ error: 'Erro ao baixar o vídeo' })
+                    });
+                } else {
+                    console.log(`Vídeo baixado com sucesso: ${stdout}`);
 
-            // Envie o arquivo de vídeo baixado como resposta
-            const videoPath = `${__dirname}/video.mp4`;
-            return {
-                statusCode: 200,
-                headers: {
-                    'Content-Type': 'video/mp4',
-                    'Content-Disposition': 'attachment; filename="video.mp4"'
-                },
-                body: videoPath
-            };
+                    // Envie o arquivo de vídeo baixado como resposta
+                    const videoPath = `${__dirname}/video.mp4`;
+                    resolve({
+                        statusCode: 200,
+                        headers: {
+                            'Content-Type': 'video/mp4',
+                            'Content-Disposition': 'attachment; filename="video.mp4"'
+                        },
+                        body: videoPath
+                    });
+                }
+            });
         });
     } catch (error) {
         console.error('Erro ao buscar vídeo:', error);
