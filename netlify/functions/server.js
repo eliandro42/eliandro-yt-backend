@@ -40,14 +40,15 @@ exports.handler = async function(event, context) {
     }
 
     try {
-        // Faz uma requisição POST para o yt5s para obter o link de download
-        const response = await axios.post('https://yt5s.com/api/ajax', {
+        // Faz uma requisição POST para o y2mate para obter o link de download
+        const response = await axios.post('https://www.y2mate.com/mates/convert', {
             url: youtubeUrl,
-            format: 'mp4'
+            ajax: '1',
+            quality: '999'
         });
 
         // Verifica se foi possível obter o link de download
-        if (!response.data || !response.data.dl_link) {
+        if (!response.data || !response.data.result) {
             return {
                 statusCode: 500,
                 headers,
@@ -56,7 +57,7 @@ exports.handler = async function(event, context) {
         }
 
         // Obtém o link de download do vídeo
-        const downloadLink = response.data.dl_link;
+        const downloadLink = response.data.result.split('"')[1];
 
         // Executa o comando para baixar o vídeo utilizando o wget
         const downloadCommand = `wget -O video.mp4 ${downloadLink}`;
